@@ -58,11 +58,12 @@ References
 import numpy as np
 
 from colour.algebra import spow
-from colour.biochemistry import reaction_rate_MichaelisMenten_Michaelis1913
-from colour.utilities import (CaseInsensitiveMapping, as_float_array, as_float,
-                              filter_kwargs, from_range_100,
-                              get_domain_range_scale, to_domain_1,
-                              to_domain_100, usage_warning, validate_method)
+from colour.biochemistry import (reaction_rate_MichaelisMenten_Michaelis1913,
+                                 reaction_rate_MichaelisMenten_Abebe2017)
+from colour.utilities import (
+    CaseInsensitiveMapping, as_float_array, as_float, as_numeric,
+    filter_kwargs, from_range_1, from_range_100, get_domain_range_scale,
+    to_domain_1, to_domain_100, usage_warning, validate_method)
 
 __author__ = 'Colour Developers'
 __copyright__ = 'Copyright (C) 2013-2021 - Colour Developers'
@@ -411,12 +412,92 @@ def lightness_Fairchild2011(Y, epsilon=0.474, method='hdr-CIELAB'):
     return from_range_100(L_hdr)
 
 
+def lightness_Abebe2017(Y, Y_n=100, method='Michaelis-Menten'):
+    """
+    Computes *Lightness* :math:`L` of given *luminance* :math:`Y` using
+    *Abebe, Pouli, Larabi and Reinhard (2017)* method according to
+    *Michaelis-Menten* kinetics or *Stevens's Power Law*.
+
+    Parameters
+    ----------
+    Y : array_like
+        *luminance* :math:`Y` in :math:`cd/m^2`.
+    Y_n : numeric or array_like, optional
+        Adapting luminance :math:`Y_n` in :math:`cd/m^2`.
+    method : unicode, optional
+        **{'Michaelis-Menten', 'Stevens'}**,
+        *Lightness* :math:`L` computation method.
+
+    Returns
+    -------
+    array_like
+        *Lightness* :math:`L`.
+
+    Notes
+    -----
+
+    -   *Abebe, Pouli, Larabi and Reinhard (2017)* method uses absolute
+        luminance levels, thus the domain and range values for the *Reference*
+        and *1* scales are only indicative that the data is not affected by
+        scale transformations.
+
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``Y``      | ``UN``                | ``UN``        |
+    +------------+-----------------------+---------------+
+    | ``Y_n``    | ``UN``                | ``UN``        |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``L``      | ``UN``                | ``UN``        |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Abebe2017a`
+
+    Examples
+    --------
+    >>> lightness_Abebe2017(12.19722535)  # doctest: +ELLIPSIS
+    0.4869555...
+    >>> lightness_Abebe2017(12.19722535, method='Stevens')
+    ... # doctest: +ELLIPSIS
+    0.4745447...
+    """
+
+    Y = to_domain_1(Y)
+    Y_n = as_float_array(Y_n)
+    method = validate_method(method, ['Michaelis-Menten', 'Stevens'])
+
+    Y_Y_n = Y / Y_n
+    if method == 'stevens':
+        L = np.where(
+            Y_n <= 100,
+            1.226 * spow(Y_Y_n, 0.266) - 0.226,
+            1.127 * spow(Y_Y_n, 0.230) - 0.127,
+        )
+    else:
+        L = np.where(
+            Y_n <= 100,
+            reaction_rate_MichaelisMenten_Abebe2017(
+                spow(Y_Y_n, 0.582), 1.448, 0.635, 0.813),
+            reaction_rate_MichaelisMenten_Abebe2017(
+                spow(Y_Y_n, 0.293), 1.680, 1.584, 0.096),
+        )
+
+    return as_numeric(from_range_1(L))
+
+
 LIGHTNESS_METHODS = CaseInsensitiveMapping({
     'Glasser 1958': lightness_Glasser1958,
     'Wyszecki 1963': lightness_Wyszecki1963,
     'CIE 1976': lightness_CIE1976,
     'Fairchild 2010': lightness_Fairchild2010,
-    'Fairchild 2011': lightness_Fairchild2011
+    'Fairchild 2011': lightness_Fairchild2011,
+    'Abebe 2017': lightness_Abebe2017
 })
 LIGHTNESS_METHODS.__doc__ = """
 Supported *Lightness* computation methods.
@@ -428,7 +509,7 @@ References
 
 LIGHTNESS_METHODS : CaseInsensitiveMapping
     **{'Glasser 1958', 'Wyszecki 1963', 'CIE 1976', 'Fairchild 2010',
-    'Fairchild 2011'}**
+    'Fairchild 2011', 'Abebe 2017'}**
 
 Aliases:
 
@@ -448,7 +529,7 @@ def lightness(Y, method='CIE 1976', **kwargs):
         *luminance* :math:`Y`.
     method : unicode, optional
         **{'CIE 1976', 'Glasser 1958', 'Wyszecki 1963', 'Fairchild 2010',
-        'Fairchild 2011'}**,
+        'Fairchild 2011', 'Abebe 2017'}**,
         Computation method.
 
     Other Parameters
@@ -483,9 +564,9 @@ def lightness(Y, method='CIE 1976', **kwargs):
 
     References
     ----------
-    :cite:`CIETC1-482004m`, :cite:`Fairchild2010`, :cite:`Fairchild2011`,
-    :cite:`Glasser1958a`, :cite:`Wikipedia2007c`, :cite:`Wyszecki1963b`,
-    :cite:`Wyszecki2000bd`
+    :cite:`Abebe 2017`, :cite:`CIETC1-482004m`, :cite:`Fairchild2010`,
+    :cite:`Fairchild2011`, :cite:`Glasser1958a`, :cite:`Wikipedia2007c`,
+    :cite:`Wyszecki1963b`, :cite:`Wyszecki2000bd`
 
     Examples
     --------
@@ -502,6 +583,12 @@ def lightness(Y, method='CIE 1976', **kwargs):
     >>> lightness(12.19722535, epsilon=0.710, method='Fairchild 2011')
     ... # doctest: +ELLIPSIS
     29.8295108...
+    >>> lightness(12.19722535, epsilon=0.710, method='Fairchild 2011')
+    ... # doctest: +ELLIPSIS
+    29.8295108...
+    >>> lightness(12.19722535, method='Abebe 2017')
+    ... # doctest: +ELLIPSIS
+    48.6955571...
     """
 
     Y = as_float_array(Y)
@@ -509,10 +596,23 @@ def lightness(Y, method='CIE 1976', **kwargs):
 
     function = LIGHTNESS_METHODS[method]
 
+    # NOTE: "Abebe et al. (2017)" uses absolute luminance levels and has
+    # undefined domain-range scale, yet we modify its behaviour consistency
+    # with the other methods.
     domain_range_reference = get_domain_range_scale() == 'reference'
+    domain_range_1_100 = get_domain_range_scale() in ('1', '100')
     domain_1 = (lightness_Fairchild2010, lightness_Fairchild2011)
+    domain_range_undefined = (lightness_Abebe2017, )
 
     if function in domain_1 and domain_range_reference:
         Y = Y / 100
 
-    return function(Y, **filter_kwargs(function, **kwargs))
+    if function in domain_range_undefined and domain_range_1_100:
+        Y = Y * 100
+
+    L = function(Y, **filter_kwargs(function, **kwargs))
+
+    if function in domain_range_undefined and domain_range_reference:
+        L *= 100
+
+    return L
